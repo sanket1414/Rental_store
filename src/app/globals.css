@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-brand: #D4AF37;
+  --color-brand-foreground: #000000;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-border: var(--border);
+
+  --font-manrope: var(--font-manrope);
+  --font-serif: var(--font-playfair);
+}
+
+/* Global CSS Variables for Light/Dark Mode */
+:root {
+  /* Light Mode (Default) */
+  --background: #ffffff;
+  --foreground: #050505;
+  --card: #FAF9F6;
+  /* Cream/Off-white for cards */
+  --card-foreground: #050505;
+  --border: #E5E7EB;
+  --brand: #D4AF37;
+}
+
+/* Dark Mode Overrides */
+.dark {
+  --background: #050505;
+  /* Deep Black */
+  --foreground: #F3F4F6;
+  /* Off-White */
+  --card: #121212;
+  /* Dark Gray for cards */
+  --card-foreground: #FFFFFF;
+  --border: #27272a;
+}
+
+/* Base Styles using Variables */
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Utilities */
+.text-gold {
+  color: var(--brand);
+}
+
+.bg-gold {
+  background-color: var(--brand);
+}
+
+.pattern-dots {
+  background-image: radial-gradient(currentColor 1px, transparent 1px);
+  background-size: 20px 20px;
+  opacity: 0.2;
+}
