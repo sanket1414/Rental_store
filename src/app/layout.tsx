@@ -29,6 +29,8 @@ export default function RootLayout({
         >
           <ConditionalLayout>{children}</ConditionalLayout>
         </ThemeProvider>
+        {/* Google Model Viewer for 3D Support */}
+        <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js" async></script>
       </body>
     </html>
   );

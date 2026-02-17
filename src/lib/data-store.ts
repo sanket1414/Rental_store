@@ -75,6 +75,10 @@ export async function getProducts(): Promise<Product[]> {
                     tag: p.tag,
                     inventory: p.inventory,
                     isActive: p.is_active,
+                    subCategory: p.sub_category,
+                    additionalImages: p.additional_images || [],
+                    gifUrl: p.gif_url,
+                    model3dUrl: p.model_3d_url,
                     createdAt: p.created_at
                 }));
             }
@@ -107,10 +111,19 @@ export async function addProduct(product: Omit<Product, 'id' | 'createdAt'>): Pr
                 category: product.category,
                 tag: product.tag,
                 inventory: product.inventory,
-                is_active: product.isActive
+                sub_category: product.subCategory,
+                is_active: product.isActive,
+                additional_images: product.additionalImages || [],
+                gif_url: product.gifUrl,
+                model_3d_url: product.model3dUrl
             }]).select().single();
 
-            if (!error && data) {
+            if (error) {
+                console.error('Supabase addProduct error:', error);
+                throw new Error(error.message || 'Failed to add product to Supabase');
+            }
+
+            if (data) {
                 return {
                     id: data.id,
                     name: data.name,
@@ -122,11 +135,15 @@ export async function addProduct(product: Omit<Product, 'id' | 'createdAt'>): Pr
                     tag: data.tag,
                     inventory: data.inventory,
                     isActive: data.is_active,
+                    additionalImages: data.additional_images || [],
+                    gifUrl: data.gif_url,
+                    model3dUrl: data.model_3d_url,
                     createdAt: data.created_at
                 };
             }
-        } catch (e) {
-            console.error('Supabase addProduct error:', e);
+        } catch (e: any) {
+            console.error('Supabase addProduct catch block:', e);
+            if (isSupabaseConfigured) throw e;
         }
     }
 
@@ -154,9 +171,17 @@ export async function updateProduct(id: string, updates: Partial<Product>): Prom
             if (updates.tag !== undefined) mappedUpdates.tag = updates.tag;
             if (updates.inventory !== undefined) mappedUpdates.inventory = updates.inventory;
             if (updates.isActive !== undefined) mappedUpdates.is_active = updates.isActive;
+            if (updates.additionalImages !== undefined) mappedUpdates.additional_images = updates.additionalImages;
+            if (updates.gifUrl !== undefined) mappedUpdates.gif_url = updates.gifUrl;
+            if (updates.model3dUrl !== undefined) mappedUpdates.model_3d_url = updates.model3dUrl;
 
             const { data, error } = await supabase.from('products').update(mappedUpdates).eq('id', id).select().single();
-            if (!error && data) {
+            if (error) {
+                console.error('Supabase updateProduct error:', error);
+                throw new Error(error.message || 'Failed to update product in Supabase');
+            }
+
+            if (data) {
                 return {
                     id: data.id,
                     name: data.name,
@@ -168,11 +193,15 @@ export async function updateProduct(id: string, updates: Partial<Product>): Prom
                     tag: data.tag,
                     inventory: data.inventory,
                     isActive: data.is_active,
+                    additionalImages: data.additional_images || [],
+                    gifUrl: data.gif_url,
+                    model3dUrl: data.model_3d_url,
                     createdAt: data.created_at
                 };
             }
-        } catch (e) {
-            console.error('Supabase updateProduct error:', e);
+        } catch (e: any) {
+            console.error('Supabase updateProduct catch block:', e);
+            if (isSupabaseConfigured) throw e;
         }
     }
 
@@ -188,9 +217,17 @@ export async function deleteProduct(id: string): Promise<boolean> {
     if (isSupabaseConfigured && supabase && isUUID(id)) {
         try {
             const { error } = await supabase.from('products').delete().eq('id', id);
-            if (!error) return true;
-        } catch (e) {
-            console.error('Supabase deleteProduct error:', e);
+
+            if (error) {
+                console.error('Supabase deleteProduct error:', error);
+                throw new Error(error.message || 'Failed to delete product from Supabase');
+            }
+
+            return true;
+        } catch (e: any) {
+            console.error('Supabase deleteProduct catch block:', e);
+            if (isSupabaseConfigured) throw e;
+            return false;
         }
     }
 
@@ -219,8 +256,10 @@ export async function getRequests(): Promise<RentalRequest[]> {
                     outfitType: r.outfit_type || 'other',
                     message: r.message || '',
                     status: r.status,
-                    quotedPrice: r.quoted_price,
-                    adminNotes: r.admin_notes,
+                    quotedPrice: r.quoted_price || 0,
+                    advancePaid: r.advance_paid || 0,
+                    depositAmount: r.deposit_amount || 0,
+                    adminNotes: r.admin_notes || '',
                     createdAt: r.created_at,
                     updatedAt: r.created_at
                 }));
@@ -235,9 +274,19 @@ export async function getRequests(): Promise<RentalRequest[]> {
 export async function addRequest(request: Omit<RentalRequest, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'adminNotes' | 'quotedPrice'>): Promise<RentalRequest> {
     if (isSupabaseConfigured && supabase) {
         try {
+            let finalProductId: string | null = null;
+            if (request.productId && isUUID(request.productId)) {
+                const { data: prodExists } = await supabase.from('products').select('id').eq('id', request.productId).single();
+                if (prodExists) {
+                    finalProductId = request.productId;
+                } else {
+                    console.warn(`Product ID ${request.productId} not found in Supabase. Inserting request without foreign key.`);
+                }
+            }
+
             const { data, error } = await supabase.from('requests').insert([{
-                product_id: (request.productId && isUUID(request.productId)) ? request.productId : null,
-                product_name: request.productName,
+                product_id: finalProductId,
+                product_name: request.productName || request.outfitType,
                 customer_name: request.customerName,
                 phone: request.phone,
                 email: request.email,
@@ -245,11 +294,24 @@ export async function addRequest(request: Omit<RentalRequest, 'id' | 'createdAt'
                 days_required: request.daysRequired,
                 outfit_type: request.outfitType,
                 message: request.message,
-                status: 'pending'
+                status: 'pending',
+                quoted_price: 0,
+                advance_paid: request.advancePaid || 0,
+                deposit_amount: request.depositAmount || 0,
+                admin_notes: ''
             }]).select().single();
 
-            if (!error && data) {
-                await upsertCustomer(request.customerName, request.phone, request.email);
+            if (error) {
+                console.error('Supabase addRequest error:', error.message, error.details, error.hint);
+                throw new Error(error.message || 'Failed to add request to Supabase');
+            }
+
+            if (data) {
+                try {
+                    await upsertCustomer(request.customerName, request.phone, request.email);
+                } catch (ce) {
+                    console.error('Customer upsert failed during request:', ce);
+                }
                 return {
                     id: data.id,
                     productId: data.product_id,
@@ -259,28 +321,37 @@ export async function addRequest(request: Omit<RentalRequest, 'id' | 'createdAt'
                     email: data.email,
                     eventDate: data.event_date,
                     daysRequired: data.days_required,
-                    outfitType: data.outfit_type,
-                    message: data.message,
+                    outfitType: data.outfit_type || 'other',
+                    message: data.message || '',
                     status: data.status,
-                    quotedPrice: data.quoted_price,
-                    adminNotes: data.admin_notes,
+                    quotedPrice: data.quoted_price || 0,
+                    advancePaid: data.advance_paid || 0,
+                    depositAmount: data.deposit_amount || 0,
+                    adminNotes: data.admin_notes || '',
                     createdAt: data.created_at,
                     updatedAt: data.created_at
-                };
+                } as any;
             }
-        } catch (e) {
-            console.error('Supabase addRequest error:', e);
+        } catch (e: any) {
+            console.error('Supabase addRequest catch block:', e);
+            if (isSupabaseConfigured) throw e;
         }
     }
 
+    console.warn('Falling back to local storage for addRequest (Supabase not configured or failed)');
+    if (typeof window !== 'undefined') {
+        alert('Warning: Could not save to database. Saving to local browser storage instead. Please check your Supabase connection.');
+    }
     const requests = getLocalStore<RentalRequest>('parnika_requests');
     const now = new Date().toISOString();
     const newRequest: RentalRequest = {
-        ...request,
         id: generateId(),
+        ...request,
         status: 'pending',
         adminNotes: '',
         quotedPrice: 0,
+        advancePaid: 0,
+        depositAmount: 0,
         createdAt: now,
         updatedAt: now,
     };
@@ -296,10 +367,18 @@ export async function updateRequest(id: string, updates: Partial<RentalRequest>)
             const mappedUpdates: any = {};
             if (updates.status !== undefined) mappedUpdates.status = updates.status;
             if (updates.quotedPrice !== undefined) mappedUpdates.quoted_price = updates.quotedPrice;
+            if (updates.advancePaid !== undefined) mappedUpdates.advance_paid = updates.advancePaid;
+            if (updates.depositAmount !== undefined) mappedUpdates.deposit_amount = updates.depositAmount;
             if (updates.adminNotes !== undefined) mappedUpdates.admin_notes = updates.adminNotes;
 
             const { data, error } = await supabase.from('requests').update(mappedUpdates).eq('id', id).select().single();
-            if (!error && data) {
+
+            if (error) {
+                console.error('Supabase updateRequest error:', error);
+                throw new Error(error.message || 'Failed to update request in Supabase');
+            }
+
+            if (data) {
                 return {
                     id: data.id,
                     productId: data.product_id,
@@ -309,17 +388,20 @@ export async function updateRequest(id: string, updates: Partial<RentalRequest>)
                     email: data.email,
                     eventDate: data.event_date,
                     daysRequired: data.days_required,
-                    outfitType: data.outfit_type,
-                    message: data.message,
+                    outfitType: data.outfit_type || 'other',
+                    message: data.message || '',
                     status: data.status,
-                    quotedPrice: data.quoted_price,
-                    adminNotes: data.admin_notes,
+                    quotedPrice: data.quoted_price || 0,
+                    advancePaid: data.advance_paid || 0,
+                    depositAmount: data.deposit_amount || 0,
+                    adminNotes: data.admin_notes || '',
                     createdAt: data.created_at,
                     updatedAt: data.created_at
-                };
+                } as any;
             }
-        } catch (e) {
-            console.error('Supabase updateRequest error:', e);
+        } catch (e: any) {
+            console.error('Supabase updateRequest catch block:', e);
+            if (isSupabaseConfigured) throw e;
         }
     }
 
@@ -357,56 +439,94 @@ export async function getCustomers(): Promise<Customer[]> {
 export async function upsertCustomer(name: string, phone: string, email?: string): Promise<Customer> {
     if (isSupabaseConfigured && supabase) {
         try {
-            const { data: existing } = await supabase.from('customers').select('*').eq('phone', phone).single();
-            if (existing) {
-                const { data: updated } = await supabase.from('customers').update({ name, email: email || existing.email }).eq('id', existing.id).select().single();
-                return {
-                    id: updated.id,
-                    name: updated.name,
-                    phone: updated.phone,
-                    email: updated.email,
-                    totalSpent: updated.total_spent,
-                    requestCount: 0,
-                    createdAt: updated.created_at
-                };
+            const customerData = {
+                name: name,
+                phone: phone,
+                email: email || null,
+            };
+
+            // Try to find an existing customer by phone
+            let { data: existingCustomer, error: findError } = await supabase
+                .from('customers')
+                .select('*')
+                .eq('phone', phone)
+                .maybeSingle();
+
+            if (findError && findError.code !== 'PGRST116') { // PGRST116 means no rows found
+                console.error('Supabase upsertCustomer find error:', findError.message, findError.details, findError.hint);
+                throw new Error(findError.message || 'Failed to find customer in Supabase');
+            }
+
+            let resultData;
+            if (existingCustomer) {
+                // Update existing customer
+                const { data, error } = await supabase
+                    .from('customers')
+                    .update(customerData)
+                    .eq('id', existingCustomer.id)
+                    .select()
+                    .single();
+
+                if (error) {
+                    console.error('Supabase upsertCustomer update error:', error.message, error.details, error.hint);
+                    throw new Error(error.message || 'Failed to update customer in Supabase');
+                }
+                resultData = data;
             } else {
-                const { data: created } = await supabase.from('customers').insert([{ name, phone, email }]).select().single();
+                // Insert new customer
+                const { data, error } = await supabase
+                    .from('customers')
+                    .insert([{ ...customerData, total_spent: 0, request_count: 0 }])
+                    .select()
+                    .single();
+
+                if (error) {
+                    console.error('Supabase upsertCustomer insert error:', error.message, error.details, error.hint);
+                    throw new Error(error.message || 'Failed to insert customer to Supabase');
+                }
+                resultData = data;
+            }
+
+            if (resultData) {
                 return {
-                    id: created.id,
-                    name: created.name,
-                    phone: created.phone,
-                    email: created.email,
-                    totalSpent: created.total_spent,
-                    requestCount: 0,
-                    createdAt: created.created_at
+                    id: resultData.id,
+                    name: resultData.name,
+                    phone: resultData.phone,
+                    email: resultData.email,
+                    totalSpent: resultData.total_spent,
+                    requestCount: resultData.request_count,
+                    createdAt: resultData.created_at
                 };
             }
-        } catch (e) {
-            console.error('Supabase upsertCustomer error:', e);
+        } catch (e: any) {
+            console.error('Supabase upsertCustomer catch block:', e);
+            if (isSupabaseConfigured) throw e;
         }
     }
 
+    console.warn('Falling back to local storage for upsertCustomer (Supabase not configured or failed)');
     const customers = getLocalStore<Customer>('parnika_customers');
-    const existing = customers.find((c) => c.phone === phone);
-    if (existing) {
-        existing.requestCount += 1;
-        existing.name = name;
-        if (email) existing.email = email;
+    const existingCustomer = customers.find(c => c.phone === phone);
+    if (existingCustomer) {
+        existingCustomer.name = name;
+        if (email) existingCustomer.email = email;
+        existingCustomer.createdAt = new Date().toISOString(); // Update timestamp
         setLocalStore('parnika_customers', customers);
-        return existing;
+        return existingCustomer;
+    } else {
+        const newCustomer: Customer = {
+            id: generateId(),
+            name,
+            phone,
+            email: email || '',
+            totalSpent: 0,
+            requestCount: 0,
+            createdAt: new Date().toISOString(),
+        };
+        customers.push(newCustomer);
+        setLocalStore('parnika_customers', customers);
+        return newCustomer;
     }
-    const newCustomer: Customer = {
-        id: generateId(),
-        name,
-        phone,
-        email,
-        totalSpent: 0,
-        requestCount: 1,
-        createdAt: new Date().toISOString(),
-    };
-    customers.push(newCustomer);
-    setLocalStore('parnika_customers', customers);
-    return newCustomer;
 }
 
 // ─── Invoices ──────────────────────────────────────────
@@ -426,6 +546,8 @@ export async function getInvoices(): Promise<Invoice[]> {
                     subtotal: i.subtotal,
                     discount: i.discount,
                     total: i.total,
+                    advancePaid: i.advance_paid || 0,
+                    depositAmount: i.deposit_amount || 0,
                     status: i.status as any,
                     notes: i.notes,
                     createdAt: i.created_at
@@ -441,6 +563,14 @@ export async function getInvoices(): Promise<Invoice[]> {
 export async function addInvoice(invoice: Omit<Invoice, 'id' | 'invoiceNumber' | 'createdAt'>): Promise<Invoice> {
     if (isSupabaseConfigured && supabase) {
         try {
+            if (invoice.requestId && isUUID(invoice.requestId)) {
+                const { data: existing } = await supabase.from('invoices').select('id').eq('request_id', invoice.requestId).maybeSingle();
+                if (existing) {
+                    console.error('Duplicate invoice attempt for request:', invoice.requestId);
+                    throw new Error('An invoice already exists for this request.');
+                }
+            }
+
             const { data: allInvoices } = await supabase.from('invoices').select('id');
             const nextNum = (allInvoices?.length || 0) + 1;
             const invoiceNumber = `INV-${String(nextNum).padStart(4, '0')}`;
@@ -453,11 +583,19 @@ export async function addInvoice(invoice: Omit<Invoice, 'id' | 'invoiceNumber' |
                 customer_phone: invoice.customerPhone,
                 items: invoice.items,
                 subtotal: invoice.subtotal || invoice.total,
+                discount: invoice.discount || 0,
                 total: invoice.total,
+                advance_paid: invoice.advancePaid || 0,
+                deposit_amount: invoice.depositAmount || 0,
                 status: 'draft'
             }]).select().single();
 
-            if (!error && data) {
+            if (error) {
+                console.error('Supabase addInvoice error:', error);
+                throw new Error(error.message || 'Failed to add invoice to Supabase');
+            }
+
+            if (data) {
                 return {
                     id: data.id,
                     invoiceNumber: data.invoice_number,
@@ -469,13 +607,16 @@ export async function addInvoice(invoice: Omit<Invoice, 'id' | 'invoiceNumber' |
                     subtotal: data.subtotal,
                     discount: data.discount,
                     total: data.total,
+                    advancePaid: data.advance_paid || 0,
+                    depositAmount: data.deposit_amount || 0,
                     status: data.status as any,
                     notes: data.notes,
                     createdAt: data.created_at
                 };
             }
-        } catch (e) {
-            console.error('Supabase addInvoice error:', e);
+        } catch (e: any) {
+            console.error('Supabase addInvoice catch block:', e);
+            if (isSupabaseConfigured) throw e;
         }
     }
 
@@ -499,7 +640,13 @@ export async function updateInvoice(id: string, updates: Partial<Invoice>): Prom
             if (updates.status !== undefined) mappedUpdates.status = updates.status;
 
             const { data, error } = await supabase.from('invoices').update(mappedUpdates).eq('id', id).select().single();
-            if (!error && data) {
+
+            if (error) {
+                console.error('Supabase updateInvoice error:', error);
+                throw new Error(error.message || 'Failed to update invoice in Supabase');
+            }
+
+            if (data) {
                 return {
                     id: data.id,
                     invoiceNumber: data.invoice_number,
@@ -511,13 +658,16 @@ export async function updateInvoice(id: string, updates: Partial<Invoice>): Prom
                     subtotal: data.subtotal,
                     discount: data.discount,
                     total: data.total,
+                    advancePaid: data.advance_paid || 0,
+                    depositAmount: data.deposit_amount || 0,
                     status: data.status as any,
                     notes: data.notes,
                     createdAt: data.created_at
                 };
             }
-        } catch (e) {
-            console.error('Supabase updateInvoice error:', e);
+        } catch (e: any) {
+            console.error('Supabase updateInvoice catch block:', e);
+            if (isSupabaseConfigured) throw e;
         }
     }
 

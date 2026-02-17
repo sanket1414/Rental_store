@@ -156,12 +156,27 @@ export default function AdminInvoicesPage() {
                                             </tr>
                                         ))}
                                     </tbody>
+                                    <tfoot>
+                                        <tr>
+                                            <td colSpan={3} style={{ textAlign: 'right', padding: '8px 0', color: '#999', fontSize: '13px' }}>Subtotal</td>
+                                            <td style={{ textAlign: 'right', padding: '8px 0', color: 'white', fontSize: '13px', fontWeight: 'bold' }}>₹{selected.subtotal.toLocaleString()}</td>
+                                        </tr>
+                                        <tr>
+                                            <td colSpan={3} style={{ textAlign: 'right', padding: '8px 0', color: '#999', fontSize: '13px' }}>Advance Paid</td>
+                                            <td style={{ textAlign: 'right', padding: '8px 0', color: '#D4AF37', fontSize: '13px', fontWeight: 'bold' }}>- ₹{selected.advancePaid.toLocaleString()}</td>
+                                        </tr>
+                                        <tr>
+                                            <td colSpan={3} style={{ textAlign: 'right', padding: '8px 0', color: '#999', fontSize: '13px' }}>Security Deposit</td>
+                                            <td style={{ textAlign: 'right', padding: '8px 0', color: 'white', fontSize: '13px', fontWeight: 'bold' }}>+ ₹{selected.depositAmount.toLocaleString()}</td>
+                                        </tr>
+                                        <tr style={{ borderTop: '2px solid #D4AF37' }}>
+                                            <td colSpan={3} style={{ textAlign: 'right', padding: '12px 0', color: 'white', fontSize: '16px', fontWeight: 'bold' }}>Balance Due</td>
+                                            <td style={{ textAlign: 'right', padding: '12px 0', color: '#D4AF37', fontSize: '18px', fontWeight: 'bold' }}>₹{(selected.total - selected.advancePaid + selected.depositAmount).toLocaleString()}</td>
+                                        </tr>
+                                    </tfoot>
                                 </table>
 
-                                <div style={{ borderTop: '2px solid #D4AF37', paddingTop: '12px', display: 'flex', justifyContent: 'space-between' }}>
-                                    <span style={{ color: 'white', fontWeight: 'bold', fontSize: '16px' }}>Total</span>
-                                    <span style={{ color: '#D4AF37', fontWeight: 'bold', fontSize: '18px' }}>₹{selected.total.toLocaleString()}</span>
-                                </div>
+
                             </div>
                         </motion.div>
                     </motion.div>

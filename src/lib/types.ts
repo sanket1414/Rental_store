@@ -6,11 +6,15 @@ export interface Product {
     name: string;
     description: string;
     image: string;
+    additionalImages?: string[];
+    gifUrl?: string;
+    model3dUrl?: string;
     price: number;
     discountedPrice?: number;
     category: Category;
     tag: string;
     inventory: number;
+    subCategory?: string;
     isActive: boolean;
     createdAt: string;
 }
@@ -20,7 +24,7 @@ export type RequestStatus = 'pending' | 'approved' | 'rejected' | 'completed';
 
 export interface RentalRequest {
     id: string;
-    productId: string;
+    productId: string | null;
     productName: string;
     customerName: string;
     phone: string;
@@ -32,6 +36,8 @@ export interface RentalRequest {
     status: RequestStatus;
     adminNotes: string;
     quotedPrice: number;
+    advancePaid: number;
+    depositAmount: number;
     createdAt: string;
     updatedAt: string;
 }
@@ -51,7 +57,7 @@ export interface Customer {
 export type InvoiceStatus = 'draft' | 'sent' | 'paid';
 
 export interface InvoiceItem {
-    productId: string;
+    productId: string | null;
     productName: string;
     days: number;
     pricePerDay: number;
@@ -61,14 +67,16 @@ export interface InvoiceItem {
 export interface Invoice {
     id: string;
     invoiceNumber: string;
-    requestId: string;
-    customerId: string;
+    requestId: string | null;
+    customerId: string | null;
     customerName: string;
     customerPhone: string;
     items: InvoiceItem[];
     subtotal: number;
     discount: number;
     total: number;
+    advancePaid: number;
+    depositAmount: number;
     status: InvoiceStatus;
     notes: string;
     createdAt: string;

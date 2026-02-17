@@ -23,7 +23,7 @@ function RequestFormInner() {
     const productId = searchParams.get('productId') || '';
     const productName = searchParams.get('productName') || '';
 
-    const { register, handleSubmit, formState: { errors, isSubmitting }, reset, setValue } = useForm<FormData>({
+    const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm<FormData>({
         defaultValues: { daysRequired: 1 },
     });
     const [isSuccess, setIsSuccess] = useState(false);
@@ -42,20 +42,26 @@ function RequestFormInner() {
     }, [productId]);
 
     const onSubmit = async (data: FormData) => {
-        await addRequest({
-            productId: linkedProduct?.id || '',
-            productName: linkedProduct?.name || productName || data.outfitType,
-            customerName: data.fullName,
-            phone: data.phone,
-            email: data.email,
-            eventDate: data.eventDate,
-            daysRequired: data.daysRequired,
-            outfitType: data.outfitType,
-            message: data.message,
-        });
-        setIsSuccess(true);
-        reset();
-        setTimeout(() => setIsSuccess(false), 5000);
+        try {
+            await addRequest({
+                productId: linkedProduct?.id || null,
+                productName: linkedProduct?.name || productName || data.outfitType,
+                customerName: data.fullName,
+                phone: data.phone,
+                email: data.email,
+                eventDate: data.eventDate,
+                daysRequired: data.daysRequired,
+                outfitType: data.outfitType,
+                message: data.message,
+                advancePaid: 0,
+                depositAmount: 0,
+            });
+            setIsSuccess(true);
+            reset();
+            setTimeout(() => setIsSuccess(false), 5000);
+        } catch (error) {
+            console.error('Error submitting request:', error);
+        }
     };
 
     return (

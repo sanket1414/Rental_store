@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Pencil, Trash2, X, Search, Filter, Package, Upload, ImageIcon, Link2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Search, Filter, Package, Upload, ImageIcon, Link2, Box, CheckCircle, Loader2 } from 'lucide-react';
 import { getProducts, addProduct, updateProduct, deleteProduct } from '@/lib/data-store';
 import { Product, Category } from '@/lib/types';
 
@@ -14,9 +14,19 @@ const categories: { value: Category | 'all'; label: string }[] = [
     { value: 'photoshoots', label: 'Photoshoots' },
 ];
 
+const CATEGORIES: Category[] = ['women', 'men', 'jewellery', 'photoshoots'];
+
+const SUB_CATEGORIES: Record<Category, string[]> = {
+    women: ['Bridal/Siders Lehengas', 'Wedding Ballgowns/Lehengas', 'Groom+Bride Matching Outfits', 'Reception & Engagement gowns', 'Sangeet & Mehendi Lehengas', 'Sister of Bride Ballgowns/ Lehengas', 'Nauvari/Paithani/ South Sarees', 'Heavy Array Work Blouses'],
+    men: ['Wedding Sherwanis', 'Jodhpuris/ Tuxedos/ Indo-Western', 'Men\'s Designer Jackets'],
+    jewellery: ['Jewellery on Rent', 'AD stone', 'South Indian', 'Maharashtrian', 'Others'],
+    photoshoots: ['Maternity Shoot Gowns', 'Pre-Wedding Shoot Outfits', 'Baby Shower Outfits', 'Others']
+};
+
 const emptyForm = {
-    name: '', description: '', image: '', price: 0, discountedPrice: undefined as number | undefined,
-    category: 'women' as Category, tag: '', inventory: 1, isActive: true,
+    name: '', description: '', image: '', additionalImages: [] as string[],
+    gifUrl: '', model3dUrl: '', price: 0, discountedPrice: undefined as number | undefined,
+    category: 'women' as Category, subCategory: 'Bridal/Siders Lehengas', tag: '', inventory: 1, isActive: true,
 };
 
 export default function AdminProductsPage() {
@@ -28,6 +38,8 @@ export default function AdminProductsPage() {
     const [form, setForm] = useState(emptyForm);
     const [imageMode, setImageMode] = useState<'upload' | 'url'>('upload');
     const [dragOver, setDragOver] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileUpload = (file: File) => {
@@ -38,6 +50,41 @@ export default function AdminProductsPage() {
         const reader = new FileReader();
         reader.onload = (e) => {
             setForm(prev => ({ ...prev, image: e.target?.result as string }));
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleMultiFileUpload = (files: FileList) => {
+        Array.from(files).forEach(file => {
+            if (!file.type.startsWith('image/')) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                setForm(prev => ({
+                    ...prev,
+                    additionalImages: [...(prev.additionalImages || []), e.target?.result as string]
+                }));
+            };
+            reader.readAsDataURL(file);
+        });
+    };
+
+    const handleGifUpload = (file: File) => {
+        if (!file.type.includes('gif')) {
+            alert('Please upload a GIF file.');
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            setForm(prev => ({ ...prev, gifUrl: e.target?.result as string }));
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handle3dUpload = (file: File) => {
+        // .glb or .gltf
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            setForm(prev => ({ ...prev, model3dUrl: e.target?.result as string }));
         };
         reader.readAsDataURL(file);
     };
@@ -59,19 +106,44 @@ export default function AdminProductsPage() {
 
     const openAdd = () => { setForm(emptyForm); setEditing(null); setShowForm(true); };
     const openEdit = (p: Product) => {
-        setForm({ name: p.name, description: p.description, image: p.image, price: p.price, discountedPrice: p.discountedPrice, category: p.category, tag: p.tag, inventory: p.inventory, isActive: p.isActive });
+        setForm({
+            name: p.name,
+            description: p.description,
+            image: p.image,
+            additionalImages: p.additionalImages || [],
+            gifUrl: p.gifUrl || '',
+            model3dUrl: p.model3dUrl || '',
+            price: p.price,
+            discountedPrice: p.discountedPrice,
+            category: p.category,
+            subCategory: p.subCategory || (SUB_CATEGORIES[p.category]?.[0] || 'Others'),
+            tag: p.tag,
+            inventory: p.inventory,
+            isActive: p.isActive
+        });
         setEditing(p);
         setShowForm(true);
     };
 
     const handleSave = async () => {
-        if (editing) {
-            await updateProduct(editing.id, form);
-        } else {
-            await addProduct(form as Omit<Product, 'id' | 'createdAt'>);
+        try {
+            setSaving(true);
+            if (editing) {
+                await updateProduct(editing.id, form);
+                setNotification({ type: 'success', message: 'Product updated successfully!' });
+            } else {
+                await addProduct(form as Omit<Product, 'id' | 'createdAt'>);
+                setNotification({ type: 'success', message: 'Product added successfully!' });
+            }
+            setShowForm(false);
+            reload();
+            setTimeout(() => setNotification(null), 3000);
+        } catch (error) {
+            setNotification({ type: 'error', message: 'Something went wrong. Please try again.' });
+            setTimeout(() => setNotification(null), 3000);
+        } finally {
+            setSaving(false);
         }
-        setShowForm(false);
-        reload();
     };
 
     const handleDelete = async (id: string) => {
@@ -82,7 +154,24 @@ export default function AdminProductsPage() {
     };
 
     return (
-        <div>
+        <div className="relative">
+            {/* Success/Error Toast */}
+            <AnimatePresence>
+                {notification && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -20, x: '-50%' }}
+                        animate={{ opacity: 1, y: 0, x: '-50%' }}
+                        exit={{ opacity: 0, y: -20, x: '-50%' }}
+                        className={`fixed top-8 left-1/2 z-[100] px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border ${notification.type === 'success'
+                            ? 'bg-green-500/10 border-green-500/50 text-green-400'
+                            : 'bg-red-500/10 border-red-500/50 text-red-400'
+                            } backdrop-blur-md`}
+                    >
+                        {notification.type === 'success' ? <CheckCircle size={18} /> : <X size={18} />}
+                        <span className="text-sm font-bold tracking-wide">{notification.message}</span>
+                    </motion.div>
+                )}
+            </AnimatePresence>
             <div className="flex items-center justify-between mb-8">
                 <div>
                     <h1 className="text-2xl font-bold text-white">Products</h1>
@@ -266,32 +355,155 @@ export default function AdminProductsPage() {
                                     )}
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-gray-400 block">GIF Preview (.gif)</label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="file"
+                                                accept="image/gif"
+                                                className="hidden"
+                                                id="gif-upload"
+                                                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleGifUpload(f); }}
+                                            />
+                                            <label htmlFor="gif-upload" className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#1a1a1a] border border-gray-700 text-white text-xs cursor-pointer hover:border-[#D4AF37] transition-all">
+                                                <Upload size={14} /> Upload GIF
+                                            </label>
+                                        </div>
+                                        <input value={form.gifUrl} onChange={(e) => setForm({ ...form, gifUrl: e.target.value })} placeholder="or paste URL" className="w-full px-4 py-2 rounded-xl bg-[#1a1a1a] border border-gray-700 text-white text-xs focus:border-[#D4AF37] outline-none" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-gray-400 block">3D Model (.glb)</label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="file"
+                                                accept=".glb,.gltf"
+                                                className="hidden"
+                                                id="model-upload"
+                                                onChange={(e) => { const f = e.target.files?.[0]; if (f) handle3dUpload(f); }}
+                                            />
+                                            <label htmlFor="model-upload" className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#1a1a1a] border border-gray-700 text-white text-xs cursor-pointer hover:border-[#D4AF37] transition-all">
+                                                <Box size={14} /> Upload 3D
+                                            </label>
+                                        </div>
+                                        <input value={form.model3dUrl} onChange={(e) => setForm({ ...form, model3dUrl: e.target.value })} placeholder="or paste URL" className="w-full px-4 py-2 rounded-xl bg-[#1a1a1a] border border-gray-700 text-white text-xs focus:border-[#D4AF37] outline-none" />
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-gray-400 block">Additional Images</label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="file"
+                                            multiple
+                                            accept="image/*"
+                                            className="hidden"
+                                            id="multi-upload"
+                                            onChange={(e) => { if (e.target.files) handleMultiFileUpload(e.target.files); }}
+                                        />
+                                        <label htmlFor="multi-upload" className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#1a1a1a] border-2 border-dashed border-gray-700 text-gray-400 text-sm cursor-pointer hover:border-[#D4AF37] hover:text-white transition-all">
+                                            <Plus size={18} /> Add Images
+                                        </label>
+                                    </div>
+                                    <textarea
+                                        value={form.additionalImages?.join('\n')}
+                                        onChange={(e) => setForm({ ...form, additionalImages: e.target.value.split('\n').filter(l => l.trim() !== '') })}
+                                        className="w-full px-4 py-2.5 rounded-xl bg-[#1a1a1a] border border-gray-700 text-white text-sm focus:border-[#D4AF37] outline-none resize-none"
+                                        rows={2}
+                                        placeholder="Or paste image URLs (one per line)..."
+                                    />
+                                    {form.additionalImages && form.additionalImages.length > 0 && (
+                                        <div className="flex gap-2 mt-2 overflow-x-auto pb-2">
+                                            {form.additionalImages.map((img, i) => (
+                                                <div key={i} className="relative group flex-shrink-0">
+                                                    <img src={img} alt="Extra" className="w-16 h-16 rounded-lg object-cover border border-gray-800" />
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            setForm(f => ({ ...f, additionalImages: f.additionalImages.filter((_, idx) => idx !== i) }));
+                                                        }}
+                                                        className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    >
+                                                        <X size={10} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="text-xs font-bold text-gray-400 block mb-1.5">Price (₹)</label>
-                                        <input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} className="w-full px-4 py-2.5 rounded-xl bg-[#1a1a1a] border border-gray-700 text-white text-sm focus:border-[#D4AF37] outline-none" />
+                                        <input
+                                            type="number"
+                                            value={form.price || ''}
+                                            onChange={(e) => {
+                                                const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                                setForm({ ...form, price: Math.max(0, val) });
+                                            }}
+                                            onFocus={(e) => e.target.select()}
+                                            className="w-full px-4 py-2.5 rounded-xl bg-[#1a1a1a] border border-gray-700 text-white text-sm focus:border-[#D4AF37] outline-none"
+                                        />
                                     </div>
                                     <div>
                                         <label className="text-xs font-bold text-gray-400 block mb-1.5">Discounted Price (₹)</label>
-                                        <input type="number" value={form.discountedPrice || ''} onChange={(e) => setForm({ ...form, discountedPrice: e.target.value ? Number(e.target.value) : undefined })} placeholder="Optional" className="w-full px-4 py-2.5 rounded-xl bg-[#1a1a1a] border border-gray-700 text-white text-sm focus:border-[#D4AF37] outline-none" />
+                                        <input
+                                            type="number"
+                                            value={form.discountedPrice || ''}
+                                            onChange={(e) => {
+                                                const val = e.target.value === '' ? undefined : Number(e.target.value);
+                                                setForm({ ...form, discountedPrice: val !== undefined ? Math.max(0, val) : undefined });
+                                            }}
+                                            onFocus={(e) => e.target.select()}
+                                            placeholder="Optional"
+                                            className="w-full px-4 py-2.5 rounded-xl bg-[#1a1a1a] border border-gray-700 text-white text-sm focus:border-[#D4AF37] outline-none"
+                                        />
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-3 gap-4">
-                                    <div>
-                                        <label className="text-xs font-bold text-gray-400 block mb-1.5">Category</label>
-                                        <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value as Category })} className="w-full px-4 py-2.5 rounded-xl bg-[#1a1a1a] border border-gray-700 text-white text-sm focus:border-[#D4AF37] outline-none">
-                                            <option value="women">Women&apos;s</option>
-                                            <option value="men">Men&apos;s</option>
-                                            <option value="jewellery">Jewellery</option>
-                                            <option value="photoshoots">Photoshoots</option>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-gray-400 block">Category</label>
+                                        <select
+                                            value={form.category}
+                                            onChange={(e) => {
+                                                const cat = e.target.value as Category;
+                                                setForm({
+                                                    ...form,
+                                                    category: cat,
+                                                    subCategory: SUB_CATEGORIES[cat][0]
+                                                });
+                                            }}
+                                            className="w-full px-4 py-2.5 rounded-xl bg-[#1a1a1a] border border-gray-700 text-white text-sm focus:border-[#D4AF37] outline-none"
+                                        >
+                                            {CATEGORIES.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
                                         </select>
                                     </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-gray-400 block">Outfit Type (Sub-Category)</label>
+                                        <select
+                                            value={form.subCategory}
+                                            onChange={(e) => setForm({ ...form, subCategory: e.target.value })}
+                                            className="w-full px-4 py-2.5 rounded-xl bg-[#1a1a1a] border border-gray-700 text-white text-sm focus:border-[#D4AF37] outline-none"
+                                        >
+                                            {SUB_CATEGORIES[form.category].map(sc => <option key={sc} value={sc}>{sc}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="text-xs font-bold text-gray-400 block mb-1.5">Tag</label>
                                         <input value={form.tag} onChange={(e) => setForm({ ...form, tag: e.target.value })} placeholder="e.g. Bestseller" className="w-full px-4 py-2.5 rounded-xl bg-[#1a1a1a] border border-gray-700 text-white text-sm focus:border-[#D4AF37] outline-none" />
                                     </div>
                                     <div>
                                         <label className="text-xs font-bold text-gray-400 block mb-1.5">Inventory</label>
-                                        <input type="number" value={form.inventory} onChange={(e) => setForm({ ...form, inventory: Number(e.target.value) })} className="w-full px-4 py-2.5 rounded-xl bg-[#1a1a1a] border border-gray-700 text-white text-sm focus:border-[#D4AF37] outline-none" />
+                                        <input
+                                            type="number"
+                                            value={form.inventory || ''}
+                                            onChange={(e) => {
+                                                const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                                setForm({ ...form, inventory: Math.max(0, val) });
+                                            }}
+                                            onFocus={(e) => e.target.select()}
+                                            className="w-full px-4 py-2.5 rounded-xl bg-[#1a1a1a] border border-gray-700 text-white text-sm focus:border-[#D4AF37] outline-none"
+                                        />
                                     </div>
                                 </div>
                                 <label className="flex items-center gap-3 cursor-pointer">
@@ -301,7 +513,16 @@ export default function AdminProductsPage() {
                             </div>
                             <div className="p-6 border-t border-gray-800 flex gap-3 justify-end">
                                 <button onClick={() => setShowForm(false)} className="px-5 py-2.5 rounded-xl text-sm font-medium text-gray-400 hover:bg-gray-800 transition-all">Cancel</button>
-                                <button onClick={handleSave} disabled={!form.name || !form.price} className="bg-[#D4AF37] text-black px-5 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50">{editing ? 'Update' : 'Add Product'}</button>
+                                <button onClick={handleSave} disabled={!form.name || !form.price || saving} className="bg-[#D4AF37] text-black px-6 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2">
+                                    {saving ? (
+                                        <>
+                                            <Loader2 size={16} className="animate-spin" />
+                                            Saving...
+                                        </>
+                                    ) : (
+                                        editing ? 'Update Product' : 'Add Product'
+                                    )}
+                                </button>
                             </div>
                         </motion.div>
                     </motion.div>
