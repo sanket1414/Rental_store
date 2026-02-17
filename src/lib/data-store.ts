@@ -638,6 +638,8 @@ export async function updateInvoice(id: string, updates: Partial<Invoice>): Prom
         try {
             const mappedUpdates: any = {};
             if (updates.status !== undefined) mappedUpdates.status = updates.status;
+            if (updates.advancePaid !== undefined) mappedUpdates.advance_paid = updates.advancePaid;
+            if (updates.depositAmount !== undefined) mappedUpdates.deposit_amount = updates.depositAmount;
 
             const { data, error } = await supabase.from('invoices').update(mappedUpdates).eq('id', id).select().single();
 

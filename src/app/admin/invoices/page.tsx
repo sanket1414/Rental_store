@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, Eye, Printer, X, Check } from 'lucide-react';
+import { FileText, Eye, Printer, X, Check, MessageCircle } from 'lucide-react';
 import { getInvoices, updateInvoice } from '@/lib/data-store';
 import { Invoice, InvoiceStatus } from '@/lib/types';
 
@@ -16,8 +16,18 @@ export default function AdminInvoicesPage() {
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [selected, setSelected] = useState<Invoice | null>(null);
     const printRef = useRef<HTMLDivElement>(null);
+    const receiptRef = useRef<HTMLDivElement>(null);
+    const [editAdvance, setEditAdvance] = useState<number | ''>(0);
+    const [editDeposit, setEditDeposit] = useState<number | ''>(0);
 
     useEffect(() => { reload(); }, []);
+
+    useEffect(() => {
+        if (selected) {
+            setEditAdvance(selected.advancePaid);
+            setEditDeposit(selected.depositAmount);
+        }
+    }, [selected]);
     const reload = async () => {
         const data = await getInvoices();
         setInvoices(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
@@ -29,32 +39,74 @@ export default function AdminInvoicesPage() {
         if (selected?.id === id) setSelected({ ...selected, status });
     };
 
-    const handlePrint = () => {
-        if (!printRef.current) return;
+    const handleSavePayment = async () => {
+        if (!selected) return;
+        const advance = editAdvance === '' ? 0 : editAdvance;
+        const deposit = editDeposit === '' ? 0 : editDeposit;
+        const updated = await updateInvoice(selected.id, { advancePaid: advance, depositAmount: deposit });
+        if (updated) {
+            await reload();
+            setSelected(updated);
+            alert('Payment details updated for this invoice.');
+        }
+    };
+
+    const handlePrint = (mode: 'invoice' | 'receipt' = 'invoice') => {
+        const sourceNode = mode === 'invoice' ? printRef.current : receiptRef.current;
+        if (!sourceNode) return;
         const win = window.open('', '_blank');
         if (!win) return;
         win.document.write(`
-      <html><head><title>Invoice ${selected?.invoiceNumber}</title>
+      <html><head><title>${mode === 'invoice' ? 'Invoice' : 'Receipt'} ${selected?.invoiceNumber}</title>
       <style>
-        body { font-family: 'Segoe UI', sans-serif; padding: 40px; color: #111; }
-        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 40px; color: #111; background: #ffffff; }
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; }
         .brand { font-size: 24px; font-weight: bold; }
         .brand small { display: block; color: #D4AF37; font-size: 10px; text-transform: uppercase; letter-spacing: 3px; }
-        .inv-num { font-size: 14px; color: #666; text-align: right; }
+        .inv-num { font-size: 12px; color: #555; text-align: right; }
         .inv-num strong { display: block; font-size: 18px; color: #111; }
         table { width: 100%; border-collapse: collapse; margin: 30px 0; }
-        th { text-align: left; padding: 10px; border-bottom: 2px solid #ddd; font-size: 12px; text-transform: uppercase; color: #888; }
-        td { padding: 10px; border-bottom: 1px solid #eee; }
-        .total-row td { border-top: 2px solid #111; font-weight: bold; font-size: 16px; }
-        .footer { margin-top: 60px; text-align: center; color: #999; font-size: 12px; }
+        th { text-align: left; padding: 10px 0; border-bottom: 2px solid #ddd; font-size: 11px; text-transform: uppercase; color: #666; letter-spacing: 0.08em; }
+        td { padding: 8px 0; border-bottom: 1px solid #eee; font-size: 13px; color: #222; }
+        tfoot td { border-bottom: none; }
+        .muted { color: #666; font-size: 12px; }
+        .amount-main { color: #111; font-weight: 700; }
+        .amount-accent { color: #D4AF37; font-weight: 700; }
+        .border-top-strong td { border-top: 2px solid #111; }
+        .footer { margin-top: 48px; text-align: center; color: #888; font-size: 11px; }
         @media print { body { padding: 20px; } }
       </style></head><body>
-      ${printRef.current.innerHTML}
-      <div class="footer">Parnika — The Rental Studio | Thank you for your business</div>
+      ${sourceNode.innerHTML}
+      <div class="footer">Parnika — The Rental Studio · Thank you for your business</div>
       </body></html>
     `);
         win.document.close();
         win.print();
+    };
+
+    const handleWhatsApp = () => {
+        if (!selected) return;
+        const raw = selected.customerPhone || '';
+        const digits = raw.replace(/\D/g, '');
+        const phone = digits.length === 10 ? `91${digits}` : digits;
+        if (!phone) {
+            alert('Customer phone number is missing or invalid.');
+            return;
+        }
+        const msg = [
+            `Hi ${selected.customerName},`,
+            ``,
+            `Here are your invoice details from Parnika The Rental Studio:`,
+            `Invoice: ${selected.invoiceNumber}`,
+            `Amount: ₹${selected.total.toLocaleString()}`,
+            selected.advancePaid ? `Advance paid: ₹${selected.advancePaid.toLocaleString()}` : undefined,
+            selected.depositAmount ? `Security deposit: ₹${selected.depositAmount.toLocaleString()}` : undefined,
+            ``,
+            `Thank you!`
+        ].filter(Boolean).join('\n');
+
+        const url = `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(msg)}`;
+        window.open(url, '_blank');
     };
 
     return (
@@ -112,71 +164,173 @@ export default function AdminInvoicesPage() {
                             <div className="p-6 border-b border-gray-800 flex items-center justify-between">
                                 <h2 className="text-lg font-bold text-white">{selected.invoiceNumber}</h2>
                                 <div className="flex gap-2">
-                                    <button onClick={handlePrint} className="flex items-center gap-2 bg-[#D4AF37] text-black px-4 py-2 rounded-xl text-sm font-bold hover:opacity-90 transition-all"><Printer size={16} /> Print</button>
+                                    <button
+                                        onClick={handleWhatsApp}
+                                        className="flex items-center gap-2 bg-transparent border border-gray-700 text-gray-300 px-3 py-2 rounded-xl text-xs font-semibold hover:bg-gray-800/60 transition-all"
+                                    >
+                                        <MessageCircle size={14} /> WhatsApp
+                                    </button>
+                                    <button
+                                        onClick={() => handlePrint('invoice')}
+                                        className="flex items-center gap-2 bg-[#D4AF37] text-black px-4 py-2 rounded-xl text-sm font-bold hover:opacity-90 transition-all"
+                                    >
+                                        <Printer size={16} /> Print Invoice
+                                    </button>
+                                    <button
+                                        onClick={() => handlePrint('receipt')}
+                                        className="flex items-center gap-2 bg-transparent border border-gray-700 text-gray-300 px-3 py-2 rounded-xl text-xs font-semibold hover:bg-gray-800/60 transition-all"
+                                    >
+                                        <Printer size={14} /> Receipt
+                                    </button>
                                     <button onClick={() => setSelected(null)} className="text-gray-500 hover:text-white"><X size={20} /></button>
                                 </div>
                             </div>
 
-                            {/* Printable Content */}
-                            <div ref={printRef} className="p-6">
+                            {/* Inline payment editor for this invoice */}
+                            <div className="px-6 pb-4 bg-[#0f0f0f] border-t border-gray-800 flex flex-col gap-3">
+                                <div className="flex flex-wrap gap-4 items-end">
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-400 mb-1">Advance Paid (₹)</label>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            value={editAdvance}
+                                            onChange={(e) => setEditAdvance(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+                                            className="w-36 px-3 py-2 rounded-md bg-[#1a1a1a] border border-gray-700 text-sm text-white focus:border-[#D4AF37] outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-400 mb-1">Security Deposit (₹)</label>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            value={editDeposit}
+                                            onChange={(e) => setEditDeposit(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+                                            className="w-36 px-3 py-2 rounded-md bg-[#1a1a1a] border border-gray-700 text-sm text-white focus:border-[#D4AF37] outline-none"
+                                        />
+                                    </div>
+                                    <div className="ml-auto flex flex-col items-end gap-1 text-xs text-gray-400">
+                                        <span>Total rental: ₹{selected.total.toLocaleString()}</span>
+                                        <span>Received now: ₹{((editAdvance === '' ? 0 : editAdvance) + (editDeposit === '' ? 0 : editDeposit)).toLocaleString()}</span>
+                                        <button
+                                            onClick={handleSavePayment}
+                                            className="mt-1 inline-flex items-center gap-1 bg-[#D4AF37]/10 text-[#D4AF37] px-3 py-1.5 rounded-md text-xs font-semibold hover:bg-[#D4AF37]/20 transition-all"
+                                        >
+                                            Save Payment
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Printable Content (Invoice preview) */}
+                            <div ref={printRef} className="p-6 bg-white text-black rounded-b-2xl">
                                 <div className="header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
                                     <div>
-                                        <div className="brand" style={{ fontSize: '20px', fontWeight: 'bold', color: 'white' }}>PARNIKA</div>
+                                        <div className="brand" style={{ fontSize: '20px', fontWeight: 'bold', color: '#111' }}>PARNIKA</div>
                                         <div style={{ color: '#D4AF37', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '3px' }}>The Rental Studio</div>
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
-                                        <div style={{ color: '#999', fontSize: '12px' }}>Invoice</div>
-                                        <div style={{ color: 'white', fontWeight: 'bold' }}>{selected.invoiceNumber}</div>
-                                        <div style={{ color: '#999', fontSize: '12px' }}>{new Date(selected.createdAt).toLocaleDateString()}</div>
+                                        <div style={{ color: '#555', fontSize: '12px' }}>Invoice</div>
+                                        <div style={{ color: '#111', fontWeight: 'bold' }}>{selected.invoiceNumber}</div>
+                                        <div style={{ color: '#555', fontSize: '12px' }}>{new Date(selected.createdAt).toLocaleDateString()}</div>
                                     </div>
                                 </div>
 
                                 <div style={{ marginBottom: '20px' }}>
-                                    <div style={{ color: '#999', fontSize: '12px', marginBottom: '4px' }}>Bill To</div>
-                                    <div style={{ color: 'white', fontWeight: 'bold' }}>{selected.customerName}</div>
-                                    <div style={{ color: '#999', fontSize: '13px' }}>{selected.customerPhone}</div>
+                                    <div style={{ color: '#666', fontSize: '12px', marginBottom: '4px' }}>Bill To</div>
+                                    <div style={{ color: '#111', fontWeight: 'bold' }}>{selected.customerName}</div>
+                                    <div style={{ color: '#555', fontSize: '13px' }}>{selected.customerPhone}</div>
                                 </div>
 
                                 <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px' }}>
                                     <thead>
                                         <tr style={{ borderBottom: '1px solid #333' }}>
-                                            <th style={{ textAlign: 'left', padding: '8px 0', color: '#999', fontSize: '11px', textTransform: 'uppercase' }}>Item</th>
-                                            <th style={{ textAlign: 'right', padding: '8px 0', color: '#999', fontSize: '11px', textTransform: 'uppercase' }}>Days</th>
-                                            <th style={{ textAlign: 'right', padding: '8px 0', color: '#999', fontSize: '11px', textTransform: 'uppercase' }}>Rate</th>
-                                            <th style={{ textAlign: 'right', padding: '8px 0', color: '#999', fontSize: '11px', textTransform: 'uppercase' }}>Total</th>
+                                            <th style={{ textAlign: 'left', padding: '8px 0', color: '#666', fontSize: '11px', textTransform: 'uppercase' }}>Item</th>
+                                            <th style={{ textAlign: 'right', padding: '8px 0', color: '#666', fontSize: '11px', textTransform: 'uppercase' }}>Days</th>
+                                            <th style={{ textAlign: 'right', padding: '8px 0', color: '#666', fontSize: '11px', textTransform: 'uppercase' }}>Rate</th>
+                                            <th style={{ textAlign: 'right', padding: '8px 0', color: '#666', fontSize: '11px', textTransform: 'uppercase' }}>Total</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {selected.items.map((item, i) => (
                                             <tr key={i} style={{ borderBottom: '1px solid #222' }}>
-                                                <td style={{ padding: '8px 0', color: 'white', fontSize: '13px' }}>{item.productName}</td>
-                                                <td style={{ padding: '8px 0', color: '#ccc', fontSize: '13px', textAlign: 'right' }}>{item.days}</td>
-                                                <td style={{ padding: '8px 0', color: '#ccc', fontSize: '13px', textAlign: 'right' }}>₹{item.pricePerDay.toLocaleString()}</td>
-                                                <td style={{ padding: '8px 0', color: 'white', fontSize: '13px', textAlign: 'right', fontWeight: 'bold' }}>₹{item.total.toLocaleString()}</td>
+                                                <td style={{ padding: '8px 0', color: '#111', fontSize: '13px' }}>{item.productName}</td>
+                                                <td style={{ padding: '8px 0', color: '#555', fontSize: '13px', textAlign: 'right' }}>{item.days}</td>
+                                                <td style={{ padding: '8px 0', color: '#555', fontSize: '13px', textAlign: 'right' }}>₹{item.pricePerDay.toLocaleString()}</td>
+                                                <td style={{ padding: '8px 0', color: '#111', fontSize: '13px', textAlign: 'right', fontWeight: 'bold' }}>₹{item.total.toLocaleString()}</td>
                                             </tr>
                                         ))}
                                     </tbody>
                                     <tfoot>
                                         <tr>
-                                            <td colSpan={3} style={{ textAlign: 'right', padding: '8px 0', color: '#999', fontSize: '13px' }}>Subtotal</td>
-                                            <td style={{ textAlign: 'right', padding: '8px 0', color: 'white', fontSize: '13px', fontWeight: 'bold' }}>₹{selected.subtotal.toLocaleString()}</td>
+                                            <td colSpan={3} style={{ textAlign: 'right', padding: '8px 0', color: '#666', fontSize: '13px' }}>Subtotal</td>
+                                            <td style={{ textAlign: 'right', padding: '8px 0', color: '#111', fontSize: '13px', fontWeight: 'bold' }}>₹{selected.subtotal.toLocaleString()}</td>
                                         </tr>
                                         <tr>
-                                            <td colSpan={3} style={{ textAlign: 'right', padding: '8px 0', color: '#999', fontSize: '13px' }}>Advance Paid</td>
-                                            <td style={{ textAlign: 'right', padding: '8px 0', color: '#D4AF37', fontSize: '13px', fontWeight: 'bold' }}>- ₹{selected.advancePaid.toLocaleString()}</td>
+                                            <td colSpan={3} style={{ textAlign: 'right', padding: '8px 0', color: '#666', fontSize: '13px' }}>Advance Paid</td>
+                                            <td style={{ textAlign: 'right', padding: '8px 0', color: '#D4AF37', fontSize: '13px', fontWeight: 'bold' }}>₹{selected.advancePaid.toLocaleString()}</td>
                                         </tr>
                                         <tr>
-                                            <td colSpan={3} style={{ textAlign: 'right', padding: '8px 0', color: '#999', fontSize: '13px' }}>Security Deposit</td>
-                                            <td style={{ textAlign: 'right', padding: '8px 0', color: 'white', fontSize: '13px', fontWeight: 'bold' }}>+ ₹{selected.depositAmount.toLocaleString()}</td>
+                                            <td colSpan={3} style={{ textAlign: 'right', padding: '8px 0', color: '#666', fontSize: '13px' }}>Security Deposit (held)</td>
+                                            <td style={{ textAlign: 'right', padding: '8px 0', color: '#111', fontSize: '13px', fontWeight: 'bold' }}>₹{selected.depositAmount.toLocaleString()}</td>
                                         </tr>
                                         <tr style={{ borderTop: '2px solid #D4AF37' }}>
-                                            <td colSpan={3} style={{ textAlign: 'right', padding: '12px 0', color: 'white', fontSize: '16px', fontWeight: 'bold' }}>Balance Due</td>
-                                            <td style={{ textAlign: 'right', padding: '12px 0', color: '#D4AF37', fontSize: '18px', fontWeight: 'bold' }}>₹{(selected.total - selected.advancePaid + selected.depositAmount).toLocaleString()}</td>
+                                            <td colSpan={3} style={{ textAlign: 'right', padding: '12px 0', color: '#111', fontSize: '16px', fontWeight: 'bold' }}>Balance Due (rental)</td>
+                                            <td style={{ textAlign: 'right', padding: '12px 0', color: '#D4AF37', fontSize: '18px', fontWeight: 'bold' }}>₹{Math.max(selected.total - selected.advancePaid, 0).toLocaleString()}</td>
                                         </tr>
                                     </tfoot>
                                 </table>
+                            </div>
 
+                            {/* Hidden receipt layout used only for "Receipt" print button */}
+                            <div ref={receiptRef} className="hidden">
+                                <div className="header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
+                                    <div>
+                                        <div className="brand" style={{ fontSize: '20px', fontWeight: 'bold', color: '#111' }}>PARNIKA</div>
+                                        <div style={{ color: '#D4AF37', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '3px' }}>The Rental Studio</div>
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <div style={{ color: '#555', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.15em' }}>Receipt</div>
+                                        <div style={{ color: '#111', fontWeight: 'bold' }}>{selected.invoiceNumber}</div>
+                                        <div style={{ color: '#555', fontSize: '12px' }}>{new Date(selected.createdAt).toLocaleDateString()}</div>
+                                    </div>
+                                </div>
 
+                                <div style={{ marginBottom: '20px' }}>
+                                    <div style={{ color: '#666', fontSize: '12px', marginBottom: '4px' }}>Received From</div>
+                                    <div style={{ color: '#111', fontWeight: 'bold' }}>{selected.customerName}</div>
+                                    <div style={{ color: '#555', fontSize: '13px' }}>{selected.customerPhone}</div>
+                                </div>
+
+                                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px' }}>
+                                    <tbody>
+                                        <tr>
+                                            <td style={{ padding: '8px 0', color: '#666', fontSize: '13px' }}>Rental Amount</td>
+                                            <td style={{ padding: '8px 0', color: '#111', fontSize: '13px', textAlign: 'right' }}>₹{selected.total.toLocaleString()}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style={{ padding: '8px 0', color: '#666', fontSize: '13px' }}>Advance Received</td>
+                                            <td style={{ padding: '8px 0', color: '#111', fontSize: '13px', textAlign: 'right' }}>₹{selected.advancePaid.toLocaleString()}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style={{ padding: '8px 0', color: '#666', fontSize: '13px' }}>Security Deposit</td>
+                                            <td style={{ padding: '8px 0', color: '#111', fontSize: '13px', textAlign: 'right' }}>₹{selected.depositAmount.toLocaleString()}</td>
+                                        </tr>
+                                        <tr style={{ borderTop: '2px solid #111' }}>
+                                            <td style={{ padding: '12px 0', color: '#111', fontSize: '14px', fontWeight: 'bold' }}>Total Received</td>
+                                            <td style={{ padding: '12px 0', color: '#D4AF37', fontSize: '16px', fontWeight: 'bold', textAlign: 'right' }}>₹{(selected.advancePaid + selected.depositAmount).toLocaleString()}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+
+                                <div style={{ marginTop: '32px', display: 'flex', justifyContent: 'space-between' }}>
+                                    <div style={{ color: '#777', fontSize: '11px', maxWidth: '60%' }}>
+                                        This is a computer-generated receipt for rental booking and security deposit. Final settlement will be done at the time of outfit return.
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <div style={{ borderTop: '1px solid #999', paddingTop: '8px', fontSize: '12px', color: '#333' }}>Authorised Signatory</div>
+                                    </div>
+                                </div>
                             </div>
                         </motion.div>
                     </motion.div>

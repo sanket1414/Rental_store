@@ -1,7 +1,9 @@
-'use client';
+ 'use client';
 
 import { Camera } from 'lucide-react';
 import CategoryPageLayout from '@/components/CategoryPageLayout';
+
+const CONTACT_NUMBER = '90499399455';
 
 export default function PhotoshootsPage() {
     return (
@@ -11,8 +13,11 @@ export default function PhotoshootsPage() {
             subtitle="Outfits curated for picture-perfect moments — pre-wedding shoots, maternity sessions, baby showers, and matching couple sets."
             badgeLabel="Photoshoot Specials"
             badgeIcon={<Camera size={14} />}
-            ctaTitle="Planning a Shoot?"
-            ctaDescription="Tell us your theme and vision — we'll help you pick the perfect outfits for your photoshoot. Couple matching available!"
+            ctaTitle="Can't find what you're looking for?"
+            ctaDescription={`Planning a shoot? Call us on ${CONTACT_NUMBER} and we'll help you pick matching outfits for your theme.`}
+            ctaButtonText="Contact Us"
+            ctaLink={`tel:${CONTACT_NUMBER}`}
         />
     );
 }
+
