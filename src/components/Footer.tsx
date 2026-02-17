@@ -1,10 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { Instagram, MapPin, Phone, MessageCircle } from 'lucide-react';
+import { Instagram, MapPin, Phone, MessageCircle, type LucideIcon } from 'lucide-react';
+
+type SocialLink = {
+    icon: LucideIcon;
+    href: string;
+    newTab?: boolean;
+};
 
 const Footer = () => {
-    const socials = [
+    const socials: SocialLink[] = [
         {
             icon: Phone,
             href: 'tel:90499399455',
@@ -25,7 +31,7 @@ const Footer = () => {
             href: 'https://www.instagram.com/parnika_rental_studio?igsh=MXVsM2J1dDExcnQ4OQ==',
             newTab: true,
         },
-    ] as const;
+    ];
 
     return (
         <footer className="relative bg-[#C5A029] text-[#000000] pt-32 pb-12 overflow-hidden mt-[-1px]">
