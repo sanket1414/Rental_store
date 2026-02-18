@@ -18,7 +18,7 @@ const collections = [
             'Nauvari/Paithani/ South Sarees',
             'Heavy Array Work Blouses'
         ],
-        image: 'https://images.unsplash.com/photo-1583074551184-7a387ee4c43a?auto=format&fit=crop&w=800&q=80',
+        image: 'https://images.unsplash.com/photo-1594140700424-ea505a2c93e8?q=80&w=1160&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
         link: '/women',
         icon: User,
         color: 'bg-[#D4AF37]'
@@ -31,7 +31,7 @@ const collections = [
             'Jodhpuris/ Tuxedos/ Indo-Western',
             'Men\'s Designer Jackets'
         ],
-        image: 'https://images.unsplash.com/photo-1597983073493-88cd35cf93b0?auto=format&fit=crop&w=800&q=80',
+        image: 'https://images.unsplash.com/photo-1593030103066-0093718efeb9?q=80&w=1160&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
         link: '/men',
         icon: Shirt,
         color: 'bg-[#C5A029]'

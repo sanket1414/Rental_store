@@ -98,14 +98,17 @@ export default function AdminRequestsPage() {
 
         try {
             // Update the request with current finance details first
+            // Here, deposit is the PLANNED security deposit (not yet paid in most cases)
             await updateRequest(selected.id, {
                 quotedPrice: price,
                 advancePaid: advance,
                 depositAmount: deposit,
                 adminNotes: editNotes,
-                status: 'approved' // Automatically approve if not already
+                status: 'approved', // Automatically approve if not already
             });
 
+            // When creating the invoice, we only treat the advance as actually paid.
+            // Security deposit will be collected later at pickup and updated on the invoice screen.
             await addInvoice({
                 requestId: selected.id,
                 customerId: customer?.id || '',
@@ -122,9 +125,12 @@ export default function AdminRequestsPage() {
                 discount: 0,
                 total: price || 0,
                 advancePaid: advance || 0,
-                depositAmount: deposit || 0,
+                // Deposit is NOT counted as paid at invoice creation time
+                depositAmount: 0,
                 status: 'draft',
-                notes: '',
+                notes: deposit
+                    ? `Planned security deposit: ₹${deposit.toLocaleString()}`
+                    : '',
             });
             await reload();
             setSelected(null);

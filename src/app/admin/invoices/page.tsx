@@ -17,8 +17,10 @@ export default function AdminInvoicesPage() {
     const [selected, setSelected] = useState<Invoice | null>(null);
     const printRef = useRef<HTMLDivElement>(null);
     const receiptRef = useRef<HTMLDivElement>(null);
+    const refundRef = useRef<HTMLDivElement>(null);
     const [editAdvance, setEditAdvance] = useState<number | ''>(0);
     const [editDeposit, setEditDeposit] = useState<number | ''>(0);
+    const [refundAmount, setRefundAmount] = useState<number | ''>(0);
 
     useEffect(() => { reload(); }, []);
 
@@ -51,8 +53,13 @@ export default function AdminInvoicesPage() {
         }
     };
 
-    const handlePrint = (mode: 'invoice' | 'receipt' = 'invoice') => {
-        const sourceNode = mode === 'invoice' ? printRef.current : receiptRef.current;
+    const handlePrint = (mode: 'invoice' | 'receipt' | 'refund' = 'invoice') => {
+        const sourceNode =
+            mode === 'invoice'
+                ? printRef.current
+                : mode === 'receipt'
+                    ? receiptRef.current
+                    : refundRef.current;
         if (!sourceNode) return;
         const win = window.open('', '_blank');
         if (!win) return;
@@ -182,6 +189,13 @@ export default function AdminInvoicesPage() {
                                     >
                                         <Printer size={14} /> Receipt
                                     </button>
+                                    <button
+                                        onClick={() => handlePrint('refund')}
+                                        className="flex items-center gap-2 bg-transparent border border-gray-700 text-gray-300 px-3 py-2 rounded-xl text-xs font-semibold hover:bg-gray-800/60 transition-all"
+                                        title="Deposit refund receipt"
+                                    >
+                                        <Printer size={14} /> Refund
+                                    </button>
                                     <button onClick={() => setSelected(null)} className="text-gray-500 hover:text-white"><X size={20} /></button>
                                 </div>
                             </div>
@@ -212,6 +226,16 @@ export default function AdminInvoicesPage() {
                                     <div className="ml-auto flex flex-col items-end gap-1 text-xs text-gray-400">
                                         <span>Total rental: ₹{selected.total.toLocaleString()}</span>
                                         <span>Received now: ₹{((editAdvance === '' ? 0 : editAdvance) + (editDeposit === '' ? 0 : editDeposit)).toLocaleString()}</span>
+                                        <div className="mt-1 flex items-center gap-2">
+                                            <span className="text-[10px] uppercase tracking-wide text-gray-500">Refund Amount (₹)</span>
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                value={refundAmount}
+                                                onChange={(e) => setRefundAmount(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+                                                className="w-24 px-2 py-1 rounded-md bg-[#1a1a1a] border border-gray-700 text-[11px] text-white focus:border-[#D4AF37] outline-none"
+                                            />
+                                        </div>
                                         <button
                                             onClick={handleSavePayment}
                                             className="mt-1 inline-flex items-center gap-1 bg-[#D4AF37]/10 text-[#D4AF37] px-3 py-1.5 rounded-md text-xs font-semibold hover:bg-[#D4AF37]/20 transition-all"
@@ -326,6 +350,51 @@ export default function AdminInvoicesPage() {
                                 <div style={{ marginTop: '32px', display: 'flex', justifyContent: 'space-between' }}>
                                     <div style={{ color: '#777', fontSize: '11px', maxWidth: '60%' }}>
                                         This is a computer-generated receipt for rental booking and security deposit. Final settlement will be done at the time of outfit return.
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <div style={{ borderTop: '1px solid #999', paddingTop: '8px', fontSize: '12px', color: '#333' }}>Authorised Signatory</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Hidden refund receipt layout used only for "Refund" print button */}
+                            <div ref={refundRef} className="hidden">
+                                <div className="header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
+                                    <div>
+                                        <div className="brand" style={{ fontSize: '20px', fontWeight: 'bold', color: '#111' }}>PARNIKA</div>
+                                        <div style={{ color: '#D4AF37', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '3px' }}>The Rental Studio</div>
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <div style={{ color: '#555', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.15em' }}>Deposit Refund</div>
+                                        <div style={{ color: '#111', fontWeight: 'bold' }}>{selected.invoiceNumber}</div>
+                                        <div style={{ color: '#555', fontSize: '12px' }}>{new Date().toLocaleDateString()}</div>
+                                    </div>
+                                </div>
+
+                                <div style={{ marginBottom: '20px' }}>
+                                    <div style={{ color: '#666', fontSize: '12px', marginBottom: '4px' }}>Refunded To</div>
+                                    <div style={{ color: '#111', fontWeight: 'bold' }}>{selected.customerName}</div>
+                                    <div style={{ color: '#555', fontSize: '13px' }}>{selected.customerPhone}</div>
+                                </div>
+
+                                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px' }}>
+                                    <tbody>
+                                        <tr>
+                                            <td style={{ padding: '8px 0', color: '#666', fontSize: '13px' }}>Original Security Deposit</td>
+                                            <td style={{ padding: '8px 0', color: '#111', fontSize: '13px', textAlign: 'right' }}>₹{selected.depositAmount.toLocaleString()}</td>
+                                        </tr>
+                                        <tr style={{ borderTop: '2px solid #111' }}>
+                                            <td style={{ padding: '12px 0', color: '#111', fontSize: '14px', fontWeight: 'bold' }}>Deposit Refunded</td>
+                                            <td style={{ padding: '12px 0', color: '#D4AF37', fontSize: '16px', fontWeight: 'bold', textAlign: 'right' }}>
+                                                ₹{((refundAmount === '' ? selected.depositAmount : refundAmount) || 0).toLocaleString()}
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+
+                                <div style={{ marginTop: '32px', display: 'flex', justifyContent: 'space-between' }}>
+                                    <div style={{ color: '#777', fontSize: '11px', maxWidth: '60%' }}>
+                                        This receipt confirms that the above security deposit has been refunded for the rental under Invoice {selected.invoiceNumber}. All dues are settled subject to normal wear and tear.
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
                                         <div style={{ borderTop: '1px solid #999', paddingTop: '8px', fontSize: '12px', color: '#333' }}>Authorised Signatory</div>
